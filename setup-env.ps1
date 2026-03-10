@@ -48,12 +48,12 @@ $envContent = @"
 # DO NOT commit this file to version control
 
 # Firebase Web App Config
-REACT_APP_FIREBASE_API_KEY="AIzaSyA_Ady_SFEFaW1DZNwX-9aUQ-DhOO7oVoU"ey
-REACT_APP_FIREBASE_AUTH_DOMAIN="ramdesignworks-exec-staff.firebaseapp.com"
-REACT_APP_FIREBASE_PROJECT_ID="ramdesignworks-exec-staff"
-REACT_APP_FIREBASE_STORAGE_BUCKET="ramdesignworks-exec-staff.firebasestorage.app"
-REACT_APP_FIREBASE_MESSAGING_SENDER_ID="347930374163"
-REACT_APP_FIREBASE_APP_ID="1:347930374163:web:17c8e015df86c78504cfe6"
+REACT_APP_FIREBASE_API_KEY=""
+REACT_APP_FIREBASE_AUTH_DOMAIN=""
+REACT_APP_FIREBASE_PROJECT_ID=""
+REACT_APP_FIREBASE_STORAGE_BUCKET=""
+REACT_APP_FIREBASE_MESSAGING_SENDER_ID=""
+REACT_APP_FIREBASE_APP_ID=""
 
 # Firebase Cloud Messaging — VAPID key for push notifications
 # Get from: Firebase Console -> Project Settings -> Cloud Messaging -> Web configuration
