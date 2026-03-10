@@ -1,6 +1,6 @@
 # AI Executive Assistant — Board of Directors Stack
 
-**RMcManus Holdings LLC — Production-deployed, built solo**
+**RAMDESIGNWORKS — Production-deployed, built solo**
 
 > Cut Firestore reads from 151K/week to 8 by replacing a polling loop with `onSnapshot`. Zero infrastructure changes — just a listener swap in the local worker.
 
