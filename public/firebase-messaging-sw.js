@@ -11,12 +11,12 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-comp
 // Firebase config — these are public/safe to expose in service workers
 // Replace with your actual Firebase project config
 firebase.initializeApp({
-  apiKey:            'AIzaSyA_Ady_SFEFaW1DZNwX-9aUQ-DhOO7oVoU',
-  authDomain:        'ramdesignworks-exec-staff.firebaseapp.com',
-  projectId:         'ramdesignworks-exec-staff',
-  storageBucket:     'ramdesignworks-exec-staff.firebasestorage.app',
-  messagingSenderId: '347930374163',
-  appId:             '1:347930374163:web:17c8e015df86c78504cfe6',
+  apiKey:            '__FIREBASE_API_KEY__',
+  authDomain:        '__FIREBASE_AUTH_DOMAIN__',
+  projectId:         '__FIREBASE_PROJECT_ID__',
+  storageBucket:     '__FIREBASE_STORAGE_BUCKET__',
+  messagingSenderId: '__FIREBASE_MESSAGING_SENDER_ID__',
+  appId:             '__FIREBASE_APP_ID__',
 });
 
 const messaging = firebase.messaging();
