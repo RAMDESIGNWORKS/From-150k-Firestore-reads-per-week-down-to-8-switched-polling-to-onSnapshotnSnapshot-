@@ -328,6 +328,26 @@ const EA_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'create_calendar_event',
+      description: 'Create a new event on the user\'s Google Calendar. Use when the user asks to schedule a meeting, set an appointment, add something to the calendar, or set a reminder with a specific time.',
+      parameters: {
+        type: 'object',
+        properties: {
+          title:       { type: 'string',  description: 'Title or summary of the event (required).' },
+          startTime:   { type: 'string',  description: 'ISO 8601 start datetime e.g. 2026-03-15T14:00:00-05:00 (required).' },
+          endTime:     { type: 'string',  description: 'ISO 8601 end datetime. Defaults to 1 hour after startTime if omitted.' },
+          description: { type: 'string',  description: 'Optional event notes or agenda.' },
+          location:    { type: 'string',  description: 'Optional location or video call link (e.g. Google Meet URL from email).' },
+          attendees:   { type: 'array',   items: { type: 'string' }, description: 'Optional list of attendee email addresses to invite.' },
+          allDay:      { type: 'boolean', description: 'Set to true for all-day events. Omit startTime/endTime and provide a date string instead.' },
+        },
+        required: ['title', 'startTime'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_emails',
       description: 'Read recent or unread emails from the user\'s Gmail inbox. Use when asked about emails, messages, or inbox activity.',
       parameters: {
@@ -337,6 +357,21 @@ const EA_TOOLS = [
           maxResults: { type: 'integer', description: 'Number of emails to return (1-10)', default: 5 },
         },
         required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'extract_email_links',
+      description: 'Fetch the full body of a specific email and extract all clickable links (Zoom, Meet, DocuSign, video calls, etc.). Use when the user says to open a link from an email, join a meeting from an email, or activate a link. Returns categorised links so the user can click directly from chat.',
+      parameters: {
+        type: 'object',
+        properties: {
+          messageId: { type: 'string', description: 'Gmail message ID returned by get_emails' },
+          subject: { type: 'string', description: 'Optional: subject line to help confirm the right email' },
+        },
+        required: ['messageId'],
       },
     },
   },
@@ -391,7 +426,7 @@ const EA_TOOLS = [
 // Tools that execute immediately inside the agentic loop
 const AUTO_EXECUTE_TOOLS = new Set([
   'web_search', 'save_task', 'remember_fact', 'update_memory', 'call_bot',
-  'get_calendar', 'get_emails', 'get_directions', 'save_contact', 'get_contacts',
+  'get_calendar', 'create_calendar_event', 'get_emails', 'extract_email_links', 'get_directions', 'save_contact', 'get_contacts',
 ]);
 // Tools that require explicit user approval before execution
 const APPROVAL_REQUIRED_TOOLS = new Set(['queue_desktop_action', 'trigger_automation']);
@@ -634,6 +669,70 @@ async function executeAutoTool(toolName, args, uid, ctx = {}) {
     }
   }
 
+  // ── Create Google Calendar Event ─────────────────────────────────────────────
+  if (toolName === 'create_calendar_event') {
+    const accessToken = await getGoogleAuth(uid);
+    if (!accessToken) return { error: 'Google Calendar is not connected. Ask the user to click "Connect Google" in the EA app header.' };
+    try {
+      const { title, startTime, endTime, description = '', location = '', attendees = [], allDay = false } = args;
+      if (!title || !startTime) return { error: 'title and startTime are required.' };
+
+      // Build ISO end time — default 1 hour after start if not provided
+      let computedEnd = endTime;
+      if (!computedEnd && !allDay) {
+        const start = new Date(startTime);
+        if (!isNaN(start.getTime())) {
+          computedEnd = new Date(start.getTime() + 60 * 60 * 1000).toISOString();
+        }
+      }
+
+      const eventBody = allDay
+        ? {
+            summary: title,
+            description,
+            location,
+            start: { date: startTime.slice(0, 10) },
+            end:   { date: (computedEnd || startTime).slice(0, 10) },
+          }
+        : {
+            summary: title,
+            description,
+            location,
+            start: { dateTime: startTime, timeZone: 'America/Chicago' },
+            end:   { dateTime: computedEnd || startTime, timeZone: 'America/Chicago' },
+          };
+
+      if (attendees.length > 0) {
+        eventBody.attendees = attendees.map(email => ({ email }));
+      }
+
+      const res = await fetch(
+        'https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(eventBody),
+        }
+      );
+      const data = await res.json();
+      if (data.error) return { error: `Calendar API error: ${data.error.message}` };
+      return {
+        ok: true,
+        eventId:  data.id,
+        title:    data.summary,
+        start:    data.start?.dateTime || data.start?.date,
+        end:      data.end?.dateTime   || data.end?.date,
+        link:     data.htmlLink || null,
+        message:  `Event "${data.summary}" created successfully.`,
+      };
+    } catch (err) {
+      return { error: `Calendar create failed: ${err.message}` };
+    }
+  }
+
   // ── Gmail ────────────────────────────────────────────────────────────────────
   if (toolName === 'get_emails') {
     const accessToken = await getGoogleAuth(uid);
@@ -669,6 +768,76 @@ async function executeAutoTool(toolName, args, uid, ctx = {}) {
       return { ok: true, emails, count: emails.length, query };
     } catch (err) {
       return { error: `Gmail fetch failed: ${err.message}` };
+    }
+  }
+
+  // ── Extract Links from Email ─────────────────────────────────────────────────
+  if (toolName === 'extract_email_links') {
+    const accessToken = await getGoogleAuth(uid);
+    if (!accessToken) return { error: 'Gmail is not connected. Ask the user to click "Connect Google" in the EA app header.' };
+    try {
+      const messageId = safeText(args.messageId || '', 100);
+      if (!messageId) return { error: 'messageId is required' };
+      const res = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      const detail = await res.json();
+      if (detail.error) return { error: detail.error.message };
+
+      // Decode body — check parts recursively for text/html then text/plain
+      const decode = (b64) => Buffer.from(b64.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8');
+      const extractBody = (payload) => {
+        if (!payload) return '';
+        if (payload.body?.data) return decode(payload.body.data);
+        for (const part of (payload.parts || [])) {
+          const text = extractBody(part);
+          if (text) return text;
+        }
+        return '';
+      };
+      const body = extractBody(detail.payload);
+
+      // Pull all URLs from the body
+      const urlRegex = /https?:\/\/[^\s"'<>)\\]+/gi;
+      const allUrls = [...new Set((body.match(urlRegex) || []).map(u => u.replace(/[.,;]+$/, '')))];
+
+      // Categorise
+      const categorise = (url) => {
+        if (/zoom\.us\/j\//i.test(url)) return 'zoom';
+        if (/meet\.google\.com\//i.test(url)) return 'google_meet';
+        if (/teams\.microsoft\.com/i.test(url)) return 'teams';
+        if (/docusign\.net|docusign\.com/i.test(url)) return 'docusign';
+        if (/calendly\.com/i.test(url)) return 'calendly';
+        if (/webex\.com/i.test(url)) return 'webex';
+        if (/gotomeeting\.|gotowebinar\./i.test(url)) return 'gotomeeting';
+        if (/loom\.com\/share/i.test(url)) return 'loom';
+        if (/stripe\.com|pay\./i.test(url)) return 'payment';
+        if (/unsubscribe|optout|opt-out/i.test(url)) return 'unsubscribe';
+        if (/tracking|pixel|open\?/i.test(url)) return 'tracker';
+        return 'link';
+      };
+
+      const SKIP = new Set(['tracker', 'unsubscribe']);
+      const links = allUrls
+        .map(url => ({ url, type: categorise(url) }))
+        .filter(l => !SKIP.has(l.type));
+
+      const priority = ['zoom', 'google_meet', 'teams', 'webex', 'gotomeeting', 'docusign', 'calendly', 'loom', 'payment', 'link'];
+      links.sort((a, b) => priority.indexOf(a.type) - priority.indexOf(b.type));
+
+      const headers = detail.payload?.headers || [];
+      const get = (name) => headers.find(h => h.name === name)?.value || '';
+
+      return {
+        ok: true,
+        subject: get('Subject'),
+        from: get('From'),
+        links: links.slice(0, 20),
+        count: links.slice(0, 20).length,
+      };
+    } catch (err) {
+      return { error: `extract_email_links failed: ${err.message}` };
     }
   }
 
@@ -932,7 +1101,9 @@ You have direct access to the following tools. Use them proactively when relevan
 - **queue_desktop_action** (requires approval) — Queue a local desktop action: open an app, search files, draft email, or open a VS Code project.
 - **trigger_automation** (requires approval) — Trigger an external automation workflow (n8n/webhook): send email, book calendar, CRM update, or any external action.
 - **get_calendar** — Read upcoming events from the user's Google Calendar. Use whenever the executive asks about their schedule, meetings, or appointments.
+- **create_calendar_event** — Create a new event on Google Calendar. Use when the user asks to schedule something, set a meeting, add an appointment, or set a time-based reminder. You can also use this to add a Google Meet or video link from an email directly into a calendar event as the location field.
 - **get_emails** — Read recent or unread emails from Gmail. Use whenever they ask about their inbox or email activity.
+- **extract_email_links** — Fetch the full body of an email (by message ID from get_emails) and extract all actionable links — Zoom, Google Meet, Teams, DocuSign, payment, Calendly, etc. Use when the user says to open or activate a link from an email, or to join a meeting. Surface the links in chat so the user can click them directly. Skip trackers and unsubscribe links automatically.
 - **get_directions** — Calculate drive time and departure time for a destination using Google Maps. Also auto-opens Maps on the desktop. Use whenever they mention needing to be somewhere or ask how long to drive.
 - **save_contact** — Save or update a contact (name, phone, email) in the executive's directory.
 - **get_contacts** — Look up a contact by name from the executive's directory.

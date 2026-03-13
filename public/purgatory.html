@@ -8,6 +8,8 @@
   <!-- Firebase compat SDK via CDN (same project as the React app) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <!-- Firebase config auto-injected by Firebase Hosting — no hardcoded keys -->
+  <script src="/__/firebase/init.js"></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -195,15 +197,8 @@
   <button class="terminal-logout" id="logout-btn" tabindex="-1">[ TERMINAL LOGOUT ]</button>
 
   <script>
-    // ── Firebase config (public client config — safe to embed) ──────────
-    const firebaseConfig = {
-      apiKey:            '__FIREBASE_API_KEY__',
-      authDomain:        '__FIREBASE_AUTH_DOMAIN__',
-      projectId:         '__FIREBASE_PROJECT_ID__',
-      storageBucket:     '__FIREBASE_STORAGE_BUCKET__',
-      messagingSenderId: '__FIREBASE_MESSAGING_SENDER_ID__',
-      appId:             '__FIREBASE_APP_ID__',
-    };
+    // ── Firebase config is auto-injected by Firebase Hosting via /__/firebase/init.js
+    // No API keys are hardcoded here — firebase is already initialized by the script above
 
     const ALLOWED_EMAILS = [
       'admin@ramdesignworks.com',
@@ -211,7 +206,6 @@
       'r0dger@hotmail.com',
     ];
 
-    firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
 
     // ── If already authorized, go straight to the app ──────────────────

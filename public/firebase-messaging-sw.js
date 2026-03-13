@@ -8,16 +8,9 @@
 importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js');
 
-// Firebase config — these are public/safe to expose in service workers
-// Replace with your actual Firebase project config
-firebase.initializeApp({
-  apiKey:            '__FIREBASE_API_KEY__',
-  authDomain:        '__FIREBASE_AUTH_DOMAIN__',
-  projectId:         '__FIREBASE_PROJECT_ID__',
-  storageBucket:     '__FIREBASE_STORAGE_BUCKET__',
-  messagingSenderId: '__FIREBASE_MESSAGING_SENDER_ID__',
-  appId:             '__FIREBASE_APP_ID__',
-});
+// Firebase config is auto-injected by Firebase Hosting at runtime via /__/firebase/init.js
+// No API keys are hardcoded here — config is served securely by Firebase infrastructure
+importScripts('/__/firebase/init.js');
 
 const messaging = firebase.messaging();
 
